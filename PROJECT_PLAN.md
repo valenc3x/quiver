@@ -1,34 +1,49 @@
-# Project Plan: Random Prompt Picker
+# Project Plan: Quiver
 
 ## 1. File Format Specification
 
-### Markdown Entry Format
+### Markdown Table Format
 
-Each entry should be a markdown list item with a status indicator:
+Entries are stored in markdown tables with flexible columns:
 
+**Basic Format (Prompts):**
 ```markdown
-# My Prompts
+| Entry | Category | Used |
+|-------|----------|------|
+| Write about a childhood memory | Personal | [ ] |
+| Describe your ideal day | Future | [ ] |
+| What are you grateful for today? | Gratitude | [x] |
+| Reflect on a recent challenge | Growth | [ ] |
+```
 
-- [ ] Write about a childhood memory
-- [ ] Describe your ideal day
-- [x] What are you grateful for today?
-- [ ] Reflect on a recent challenge
+**Restaurant Format:**
+```markdown
+| Restaurant | Cuisine | Price | Used |
+|------------|---------|-------|------|
+| Mario's Pizza | Italian | $$ | [ ] |
+| Sushi House | Japanese | $$$ | [x] |
+| Taco Loco | Mexican | $ | [ ] |
+```
 
-## Section 2
-
-- [ ] Another prompt here
+**Exercise Format:**
+```markdown
+| Exercise | Body Area | Duration | Used |
+|----------|-----------|----------|------|
+| Push-ups | Upper | 10 min | [ ] |
+| Squats | Lower | 15 min | [x] |
+| Planks | Core | 5 min | [ ] |
 ```
 
 **Format Rules:**
-- `- [ ]` = Unused/available entry
-- `- [x]` = Used entry
-- Supports markdown headers for organization
-- Entry content = everything after the checkbox
-- Blank lines and comments preserved
+- First column: Entry content (required)
+- Last column: `Used` status with `[ ]` or `[x]` (required)
+- Middle columns: Flexible metadata (optional, any number)
+- Headers must be present
+- Pipe-delimited markdown table format
 
 **Metadata Storage (bottom of file):**
 ```markdown
-<!-- PICKER_METADATA
+<!-- QUIVER_METADATA
 history: ["What are you grateful for today?"]
 -->
 ```
@@ -40,9 +55,9 @@ This tracks selection order for LIFO rollback.
 ### Components
 
 ```
-random_prompt_picker/
-├── picker.py           # Main CLI interface
-├── parser.py           # Markdown parsing logic
+quiver/
+├── cli.py              # Main CLI interface (entry point)
+├── parser.py           # Markdown table parsing logic
 ├── selector.py         # Random selection logic
 ├── state.py            # State management (mark used/unused)
 ├── rollback.py         # Rollback logic
@@ -55,10 +70,12 @@ tests/
 └── test_rollback.py
 
 examples/
-└── sample_prompts.md
+├── sample_prompts.md
+├── restaurants.md
+└── exercises.md
 
 README.md
-requirements.txt
+setup.py                # For pip install
 ```
 
 ### Data Flow
@@ -66,15 +83,15 @@ requirements.txt
 ```
 User Command
     ↓
-CLI (picker.py)
+CLI (cli.py)
     ↓
-Parser (parser.py) → Parse markdown → Entry objects
+Parser (parser.py) → Parse markdown table → Entry objects with metadata
     ↓
 Selector (selector.py) → Filter unused → Random choice
     ↓
 State Manager (state.py) → Mark as used → Update file
     ↓
-Display result to user
+Display result with metadata to user
 ```
 
 ## 3. Module Specifications
@@ -83,14 +100,16 @@ Display result to user
 
 **Responsibilities:**
 - Read markdown file
-- Parse checkbox list items
-- Extract metadata (history)
-- Preserve formatting (headers, blank lines)
+- Parse markdown table rows
+- Extract entry content, metadata columns, and used status
+- Extract QUIVER_METADATA (history)
+- Preserve table formatting
 
 **Key Functions:**
 ```python
 def parse_file(filepath: str) -> ParsedFile
-def extract_entries(content: str) -> List[Entry]
+def extract_table(content: str) -> Table
+def extract_entries_from_table(table: Table) -> List[Entry]
 def extract_metadata(content: str) -> dict
 def serialize_file(parsed_file: ParsedFile) -> str
 ```
@@ -99,15 +118,16 @@ def serialize_file(parsed_file: ParsedFile) -> str
 ```python
 @dataclass
 class Entry:
-    content: str
-    used: bool
-    line_number: int
-    original_line: str
+    content: str              # First column value
+    metadata: dict[str, str]  # Middle columns as key-value pairs
+    used: bool                # Last column status
+    row_index: int            # Position in table
 
 @dataclass
 class ParsedFile:
     entries: List[Entry]
-    metadata: dict
+    headers: List[str]        # Table column headers
+    metadata: dict            # QUIVER_METADATA (history, etc.)
     raw_content: str
     filepath: str
 ```
@@ -154,25 +174,26 @@ def rollback_last(filepath: str) -> Entry | None
 def reset_all(filepath: str) -> int  # Returns count of reset entries
 ```
 
-### picker.py (CLI)
+### cli.py (CLI Entry Point)
 
 **Responsibilities:**
 - Command-line argument parsing
 - User interaction
 - Command routing
+- Display entry with metadata
 
 **Commands:**
 ```bash
-python picker.py pick <file>           # Get random entry
-python picker.py rollback <file>       # Undo last pick
-python picker.py reset <file>          # Reset all entries
-python picker.py status <file>         # Show stats (used/total)
+quiver pick <file>           # Get random entry with metadata
+quiver rollback <file>       # Undo last pick
+quiver reset <file>          # Reset all entries
+quiver status <file>         # Show stats (used/total)
 ```
 
 **CLI Design with argparse:**
 ```python
 # Main commands
-pick      - Select random unused entry
+pick      - Select random unused entry, display with metadata
 rollback  - Undo last selection
 reset     - Mark all entries as unused
 status    - Show usage statistics
@@ -183,16 +204,24 @@ status    - Show usage statistics
 --verbose, -v - Show detailed output
 ```
 
+**Output Example:**
+```bash
+$ quiver pick restaurants.md
+🎯 Mario's Pizza
+   Cuisine: Italian
+   Price: $$
+```
+
 ## 4. Implementation Phases
 
 ### Phase 1: Core Parsing (Foundation)
 - [x] Create project structure
 - [ ] Implement parser.py
-  - Parse markdown checkboxes
-  - Extract entries
-  - Handle metadata section
+  - Parse markdown tables
+  - Extract entries with metadata columns
+  - Handle QUIVER_METADATA section
 - [ ] Write tests for parser
-- [ ] Create sample markdown files
+- [ ] Create sample markdown files (prompts, restaurants, exercises)
 
 ### Phase 2: Selection Logic
 - [ ] Implement selector.py
@@ -211,10 +240,11 @@ status    - Show usage statistics
 - [ ] Write tests for rollback
 
 ### Phase 4: CLI Interface
-- [ ] Implement picker.py
-  - Argument parsing
-  - Command routing
-  - User-friendly output
+- [ ] Implement cli.py
+  - Argument parsing with argparse
+  - Command routing (pick, rollback, reset, status)
+  - User-friendly output with metadata display
+  - Setup.py for `quiver` command installation
 - [ ] Add error handling
 - [ ] Integration tests
 
@@ -238,8 +268,8 @@ status    - Show usage statistics
 3. **Rollback on empty history**: Nothing to rollback
    - Error: "No entries to rollback"
 
-4. **Malformed markdown**: Invalid checkbox syntax
-   - Warning: Skip invalid lines, continue with valid entries
+4. **Malformed markdown**: Invalid table syntax or missing columns
+   - Warning: Skip invalid rows, continue with valid entries
 
 5. **File doesn't exist**: Invalid path
    - Error: "File not found: <path>"
@@ -262,26 +292,36 @@ status    - Show usage statistics
 
 ## 6. CLI Examples
 
+**Journaling Prompts:**
 ```bash
-# Pick a random unused entry
-$ python picker.py pick prompts.md
-✨ Your prompt: "Write about a childhood memory"
+$ quiver pick prompts.md
+🎯 Write about a childhood memory
+   Category: Personal
 
-# Oops, not today - rollback
-$ python picker.py rollback prompts.md
+$ quiver rollback prompts.md
 ↩️  Rolled back: "Write about a childhood memory"
+```
 
-# Pick another one
-$ python picker.py pick prompts.md
-✨ Your prompt: "Describe your ideal day"
+**Restaurant Picker:**
+```bash
+$ quiver pick restaurants.md
+🎯 Mario's Pizza
+   Cuisine: Italian
+   Price: $$
 
-# Check status
-$ python picker.py status prompts.md
-📊 Status: 2/10 entries used (8 remaining)
+$ quiver status restaurants.md
+📊 Status: 3/15 restaurants used (12 remaining)
+```
 
-# Start over
-$ python picker.py reset prompts.md
-🔄 Reset complete: 10 entries marked as unused
+**Exercise Routine:**
+```bash
+$ quiver pick exercises.md
+🎯 Push-ups
+   Body Area: Upper
+   Duration: 10 min
+
+$ quiver reset exercises.md
+🔄 Reset complete: 20 exercises marked as unused
 ```
 
 ## 7. Testing Strategy
@@ -304,14 +344,15 @@ $ python picker.py reset prompts.md
 
 ## 8. Future Enhancements (Post-v1)
 
-- **Multiple files**: Manage different lists
+- **Multiple files**: Manage different lists, switch between them
 - **Weighted selection**: Priority/weight per entry
-- **Tags/categories**: Filter by category
-- **Statistics**: Most/least picked, streaks
+- **Filter by metadata**: `quiver pick --cuisine Italian restaurants.md`
+- **Statistics**: Most/least picked, streaks, usage patterns
 - **Config file**: Set default file path, preferences
 - **Interactive mode**: TUI with arrow key selection
 - **Export**: Generate reports of used/unused entries
 - **Scheduling**: Integrate with cron for daily picks
+- **Validation**: Validate table format, suggest fixes
 
 ## 9. Dependencies
 

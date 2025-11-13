@@ -1,8 +1,8 @@
-# Random Prompt Picker
+# Quiver
 
 ## Project Overview
 
-A lightweight Python CLI tool for randomly selecting entries from a markdown-formatted list, with state tracking and rollback capabilities.
+A lightweight Python CLI tool named **quiver** for randomly selecting entries from markdown tables, with state tracking, metadata support, and rollback capabilities.
 
 ## Problem Statement
 
@@ -15,12 +15,13 @@ Managing daily habits like journaling prompts, restaurant choices, or read-later
 ## Core Requirements
 
 ### Functional Requirements
-1. **Random Selection**: Pick a random unused entry from a markdown file
-2. **State Management**: Mark entries as "used" after selection
-3. **Exclusion Logic**: Never return already-used entries
-4. **Reverse Rollback**: Undo last selection(s) in LIFO order
-5. **Full Reset**: Mark all entries as unused
-6. **Format**: Well-formatted markdown input/output
+1. **Random Selection**: Pick a random unused entry from a markdown table
+2. **Metadata Support**: Additional table columns are returned as metadata (e.g., cuisine type, genre, body area)
+3. **State Management**: Mark entries as "used" after selection
+4. **Exclusion Logic**: Never return already-used entries
+5. **Reverse Rollback**: Undo last selection(s) in LIFO order
+6. **Full Reset**: Mark all entries as unused
+7. **Format**: Well-formatted markdown table input/output
 
 ### Non-Functional Requirements
 - Simple CLI interface
@@ -31,11 +32,12 @@ Managing daily habits like journaling prompts, restaurant choices, or read-later
 
 ## Use Cases
 
-1. **Daily journaling prompts**: Pick today's prompt, mark as used
-2. **Restaurant picker**: Choose dinner spot, rollback if plans change
-3. **Reading list**: Select next article, track progress
-4. **Exercise routines**: Random workout selection
-5. **Any list-based random selection** with progress tracking
+1. **Daily journaling prompts**: Pick today's prompt (with category metadata like "Personal", "Gratitude")
+2. **Restaurant picker**: Choose dinner spot with cuisine type (Italian, Japanese, Mexican)
+3. **Reading list**: Select next article with topic/author metadata
+4. **Exercise routines**: Random workout with body area (Upper, Lower, Core, Cardio)
+5. **Movie/book lists**: Random selection with genre metadata (Sci-Fi, Drama, Comedy)
+6. **Any list-based random selection** with flexible metadata columns
 
 ## Success Criteria
 
