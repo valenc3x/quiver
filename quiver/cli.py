@@ -8,7 +8,7 @@ from typing import Optional
 from . import __version__
 from .parser import parse_file
 from .selector import select_random_available
-from .state import pick_and_mark, save_state
+from .state import pick_and_mark, save_state, validate_history, find_entry_by_index
 from .rollback import rollback_last, reset_all
 
 
@@ -26,8 +26,14 @@ def cmd_pick(args) -> int:
         # Parse the file
         parsed = parse_file(args.file)
 
+        # Validate history
+        validate_history(parsed)
+
+        # Get history
+        history = parsed.metadata.get('history', [])
+
         # Select a random available entry
-        entry = select_random_available(parsed.entries)
+        entry = select_random_available(parsed.entries, history)
 
         if entry is None:
             print("❌ No unused entries available.")
@@ -51,7 +57,7 @@ def cmd_pick(args) -> int:
             print("\n   (Dry run - no changes made)")
 
         if args.verbose:
-            available_count = len([e for e in parsed.entries if not e.used])
+            available_count = len([e for e in parsed.entries if not e.is_used(history)])
             total_count = len(parsed.entries)
             print(f"\n   Remaining: {available_count}/{total_count}")
 
@@ -59,6 +65,9 @@ def cmd_pick(args) -> int:
 
     except FileNotFoundError:
         print(f"❌ File not found: {args.file}")
+        return 1
+    except ValueError as e:
+        print(f"❌ {e}")
         return 1
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -85,8 +94,12 @@ def cmd_rollback(args) -> int:
                 print("ℹ️  No entries to rollback")
                 return 0
 
-            last = parsed.metadata['history'][-1]
-            print(f"↩️  Would rollback: \"{last}\"")
+            last_index = parsed.metadata['history'][-1]
+            last_entry = find_entry_by_index(parsed, last_index)
+            if last_entry:
+                print(f"↩️  Would rollback: \"{last_entry.content}\"")
+            else:
+                print(f"↩️  Would rollback: index {last_index}")
             print("\n   (Dry run - no changes made)")
             return 0
 
@@ -101,7 +114,8 @@ def cmd_rollback(args) -> int:
 
         if args.verbose:
             parsed = parse_file(args.file)
-            used_count = len([e for e in parsed.entries if e.used])
+            history = parsed.metadata.get('history', [])
+            used_count = len(set(history))
             total_count = len(parsed.entries)
             print(f"   Status: {used_count}/{total_count} used")
 
@@ -111,7 +125,7 @@ def cmd_rollback(args) -> int:
         print(f"❌ File not found: {args.file}")
         return 1
     except ValueError as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ {e}")
         return 1
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -134,7 +148,8 @@ def cmd_reset(args) -> int:
         if args.dry_run:
             # Just show what would be reset
             parsed = parse_file(args.file)
-            used_count = len([e for e in parsed.entries if e.used])
+            history = parsed.metadata.get('history', [])
+            used_count = len(set(history))
             total_count = len(parsed.entries)
 
             print(f"🔄 Would reset {used_count} of {total_count} entries")
@@ -173,25 +188,30 @@ def cmd_status(args) -> int:
     """
     try:
         parsed = parse_file(args.file)
+        history = parsed.metadata.get('history', [])
 
-        used_count = len([e for e in parsed.entries if e.used])
-        available_count = len([e for e in parsed.entries if not e.used])
+        used_count = len(set(history))
+        available_count = len([e for e in parsed.entries if not e.is_used(history)])
         total_count = len(parsed.entries)
 
         print(f"📊 Status: {used_count}/{total_count} entries used ({available_count} remaining)")
 
         if args.verbose:
             # Show history
-            if parsed.metadata.get('history'):
-                print(f"\n   History ({len(parsed.metadata['history'])} items):")
-                for i, item in enumerate(reversed(parsed.metadata['history']), 1):
-                    print(f"     {i}. {item}")
+            if history:
+                print(f"\n   History ({len(history)} selections):")
+                for i, idx in enumerate(reversed(history), 1):
+                    entry = find_entry_by_index(parsed, idx)
+                    if entry:
+                        print(f"     {i}. {entry.content}")
+                    else:
+                        print(f"     {i}. [index {idx}]")
             else:
                 print("\n   History: empty")
 
-            # Show metadata columns
+            # Show metadata columns (excluding "Used" if present)
             if parsed.headers:
-                metadata_headers = parsed.headers[1:-1]  # Exclude first and last
+                metadata_headers = [h for h in parsed.headers[1:] if h.lower() != 'used']
                 if metadata_headers:
                     print(f"\n   Metadata columns: {', '.join(metadata_headers)}")
 
