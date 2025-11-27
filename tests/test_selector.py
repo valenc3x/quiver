@@ -11,13 +11,14 @@ from quiver.selector import (
 def test_get_available_entries():
     """Test filtering to get only unused entries."""
     entries = [
-        Entry(content='First', metadata={}, used=False, row_index=0),
-        Entry(content='Second', metadata={}, used=True, row_index=1),
-        Entry(content='Third', metadata={}, used=False, row_index=2),
-        Entry(content='Fourth', metadata={}, used=True, row_index=3),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
+        Entry(content='Third', metadata={}, row_index=2),
+        Entry(content='Fourth', metadata={}, row_index=3),
     ]
+    history = [1, 3]  # Mark indices 1 and 3 as used
 
-    available = get_available_entries(entries)
+    available = get_available_entries(entries, history)
 
     assert len(available) == 2
     assert available[0].content == 'First'
@@ -27,32 +28,34 @@ def test_get_available_entries():
 def test_get_available_entries_all_used():
     """Test filtering when all entries are used."""
     entries = [
-        Entry(content='First', metadata={}, used=True, row_index=0),
-        Entry(content='Second', metadata={}, used=True, row_index=1),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
     ]
+    history = [0, 1]  # All used
 
-    available = get_available_entries(entries)
+    available = get_available_entries(entries, history)
     assert len(available) == 0
 
 
 def test_get_available_entries_none_used():
     """Test filtering when no entries are used."""
     entries = [
-        Entry(content='First', metadata={}, used=False, row_index=0),
-        Entry(content='Second', metadata={}, used=False, row_index=1),
-        Entry(content='Third', metadata={}, used=False, row_index=2),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
+        Entry(content='Third', metadata={}, row_index=2),
     ]
+    history = []  # None used
 
-    available = get_available_entries(entries)
+    available = get_available_entries(entries, history)
     assert len(available) == 3
 
 
 def test_select_random():
     """Test selecting a random entry from a list."""
     entries = [
-        Entry(content='First', metadata={}, used=False, row_index=0),
-        Entry(content='Second', metadata={}, used=False, row_index=1),
-        Entry(content='Third', metadata={}, used=False, row_index=2),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
+        Entry(content='Third', metadata={}, row_index=2),
     ]
 
     # Run multiple times to check randomness (should get different results eventually)
@@ -70,39 +73,42 @@ def test_select_random_empty_list():
 def test_select_random_available():
     """Test selecting a random unused entry."""
     entries = [
-        Entry(content='First', metadata={}, used=False, row_index=0),
-        Entry(content='Second', metadata={}, used=True, row_index=1),
-        Entry(content='Third', metadata={}, used=False, row_index=2),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
+        Entry(content='Third', metadata={}, row_index=2),
     ]
+    history = [1]  # Mark index 1 (Second) as used
 
     # Run multiple times to ensure only available entries are selected
     for _ in range(10):
-        selected = select_random_available(entries)
+        selected = select_random_available(entries, history)
         assert selected is not None
-        assert not selected.used
+        assert not selected.is_used(history)
         assert selected.content in ['First', 'Third']
 
 
 def test_select_random_available_all_used():
     """Test selecting when all entries are used returns None."""
     entries = [
-        Entry(content='First', metadata={}, used=True, row_index=0),
-        Entry(content='Second', metadata={}, used=True, row_index=1),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
     ]
+    history = [0, 1]  # All used
 
-    result = select_random_available(entries)
+    result = select_random_available(entries, history)
     assert result is None
 
 
 def test_select_random_single_available():
     """Test selecting when only one entry is available."""
     entries = [
-        Entry(content='First', metadata={}, used=True, row_index=0),
-        Entry(content='Second', metadata={}, used=False, row_index=1),
-        Entry(content='Third', metadata={}, used=True, row_index=2),
+        Entry(content='First', metadata={}, row_index=0),
+        Entry(content='Second', metadata={}, row_index=1),
+        Entry(content='Third', metadata={}, row_index=2),
     ]
+    history = [0, 2]  # Mark 0 and 2 as used
 
-    selected = select_random_available(entries)
+    selected = select_random_available(entries, history)
     assert selected is not None
     assert selected.content == 'Second'
 

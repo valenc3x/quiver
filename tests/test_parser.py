@@ -16,11 +16,15 @@ def test_parse_simple_table():
     """Test parsing a simple markdown table."""
     content = """# Test Table
 
-| Entry | Category | Used |
-|-------|----------|------|
-| First entry | Personal | [ ] |
-| Second entry | Work | [x] |
-| Third entry | Personal | [ ] |
+| Entry | Category |
+|-------|----------|
+| First entry | Personal |
+| Second entry | Work |
+| Third entry | Personal |
+
+<!-- QUIVER_METADATA
+history: [1]
+-->
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -31,25 +35,29 @@ def test_parse_simple_table():
         parsed = parse_file(temp_path)
 
         # Check headers
-        assert parsed.headers == ['Entry', 'Category', 'Used']
+        assert parsed.headers == ['Entry', 'Category']
 
         # Check entries
         assert len(parsed.entries) == 3
 
+        # Check history
+        history = parsed.metadata.get('history', [])
+        assert history == [1]
+
         # First entry
         assert parsed.entries[0].content == 'First entry'
         assert parsed.entries[0].metadata == {'Category': 'Personal'}
-        assert parsed.entries[0].used is False
+        assert parsed.entries[0].is_used(history) is False
 
-        # Second entry
+        # Second entry (marked as used in history)
         assert parsed.entries[1].content == 'Second entry'
         assert parsed.entries[1].metadata == {'Category': 'Work'}
-        assert parsed.entries[1].used is True
+        assert parsed.entries[1].is_used(history) is True
 
         # Third entry
         assert parsed.entries[2].content == 'Third entry'
         assert parsed.entries[2].metadata == {'Category': 'Personal'}
-        assert parsed.entries[2].used is False
+        assert parsed.entries[2].is_used(history) is False
 
     finally:
         Path(temp_path).unlink()
@@ -57,50 +65,13 @@ def test_parse_simple_table():
 
 def test_parse_table_with_multiple_metadata_columns():
     """Test parsing a table with multiple metadata columns."""
-    content = """| Restaurant | Cuisine | Price | Used |
-|------------|---------|-------|------|
-| Mario's Pizza | Italian | $$ | [ ] |
-| Sushi House | Japanese | $$$ | [x] |
-"""
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-        f.write(content)
-        temp_path = f.name
-
-    try:
-        parsed = parse_file(temp_path)
-
-        assert len(parsed.entries) == 2
-
-        # First entry
-        assert parsed.entries[0].content == "Mario's Pizza"
-        assert parsed.entries[0].metadata == {
-            'Cuisine': 'Italian',
-            'Price': '$$'
-        }
-        assert parsed.entries[0].used is False
-
-        # Second entry
-        assert parsed.entries[1].content == 'Sushi House'
-        assert parsed.entries[1].metadata == {
-            'Cuisine': 'Japanese',
-            'Price': '$$$'
-        }
-        assert parsed.entries[1].used is True
-
-    finally:
-        Path(temp_path).unlink()
-
-
-def test_parse_table_with_metadata():
-    """Test parsing a table with QUIVER_METADATA."""
-    content = """| Entry | Category | Used |
-|-------|----------|------|
-| First entry | Personal | [x] |
-| Second entry | Work | [ ] |
+    content = """| Restaurant | Cuisine | Price |
+|------------|---------|-------|
+| Mario's Pizza | Italian | $$ |
+| Sushi House | Japanese | $$$ |
 
 <!-- QUIVER_METADATA
-history: ["First entry"]
+history: [1]
 -->
 """
 
@@ -112,7 +83,49 @@ history: ["First entry"]
         parsed = parse_file(temp_path)
 
         assert len(parsed.entries) == 2
-        assert parsed.metadata['history'] == ['First entry']
+        history = parsed.metadata.get('history', [])
+
+        # First entry
+        assert parsed.entries[0].content == "Mario's Pizza"
+        assert parsed.entries[0].metadata == {
+            'Cuisine': 'Italian',
+            'Price': '$$'
+        }
+        assert parsed.entries[0].is_used(history) is False
+
+        # Second entry
+        assert parsed.entries[1].content == 'Sushi House'
+        assert parsed.entries[1].metadata == {
+            'Cuisine': 'Japanese',
+            'Price': '$$$'
+        }
+        assert parsed.entries[1].is_used(history) is True
+
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_parse_table_with_metadata():
+    """Test parsing a table with QUIVER_METADATA."""
+    content = """| Entry | Category |
+|-------|----------|
+| First entry | Personal |
+| Second entry | Work |
+
+<!-- QUIVER_METADATA
+history: [0]
+-->
+"""
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+        f.write(content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_file(temp_path)
+
+        assert len(parsed.entries) == 2
+        assert parsed.metadata['history'] == [0]
 
     finally:
         Path(temp_path).unlink()
@@ -125,21 +138,19 @@ def test_serialize_file():
         Entry(
             content='First entry',
             metadata={'Category': 'Personal'},
-            used=False,
             row_index=0
         ),
         Entry(
             content='Second entry',
             metadata={'Category': 'Work'},
-            used=True,
             row_index=1
         )
     ]
 
     parsed = ParsedFile(
         entries=entries,
-        headers=['Entry', 'Category', 'Used'],
-        metadata={'history': ['Second entry']},
+        headers=['Entry', 'Category'],
+        metadata={'history': [1]},
         raw_content='',
         filepath=''
     )
@@ -148,24 +159,26 @@ def test_serialize_file():
     result = MarkdownTableParser.serialize_file(parsed)
 
     # Check that it contains expected parts
-    assert '| Entry | Category | Used |' in result
-    assert '| First entry | Personal | [ ] |' in result
-    assert '| Second entry | Work | [x] |' in result
+    assert '| Entry | Category |' in result
+    assert '| First entry | Personal |' in result
+    assert '| Second entry | Work |' in result
     assert '<!-- QUIVER_METADATA' in result
-    assert 'history: ["Second entry"]' in result
+    assert 'history: [1]' in result
+    # Should NOT contain Used column
+    assert 'Used' not in result
 
 
 def test_round_trip():
     """Test parsing and serializing maintains data integrity."""
     original_content = """# My List
 
-| Entry | Category | Used |
-|-------|----------|------|
-| First entry | Personal | [ ] |
-| Second entry | Work | [x] |
+| Entry | Category |
+|-------|----------|
+| First entry | Personal |
+| Second entry | Work |
 
 <!-- QUIVER_METADATA
-history: ["Second entry"]
+history: [1]
 -->
 """
 
@@ -180,25 +193,26 @@ history: ["Second entry"]
         # Verify parsed data
         assert len(parsed.entries) == 2
         assert parsed.entries[0].content == 'First entry'
-        assert parsed.entries[0].used is False
+        history = parsed.metadata.get('history', [])
+        assert parsed.entries[0].is_used(history) is False
         assert parsed.entries[1].content == 'Second entry'
-        assert parsed.entries[1].used is True
-        assert parsed.metadata['history'] == ['Second entry']
+        assert parsed.entries[1].is_used(history) is True
+        assert parsed.metadata['history'] == [1]
 
-        # Modify an entry
-        parsed.entries[0].used = True
-        parsed.metadata['history'].insert(0, 'First entry')
+        # Modify history (mark first entry as used too)
+        parsed.metadata['history'].insert(0, 0)
 
         # Save back
         save_file(parsed)
 
         # Re-parse
         parsed2 = parse_file(temp_path)
+        history2 = parsed2.metadata.get('history', [])
 
         # Verify changes persisted
-        assert parsed2.entries[0].used is True
-        assert parsed2.entries[1].used is True
-        assert parsed2.metadata['history'] == ['First entry', 'Second entry']
+        assert parsed2.entries[0].is_used(history2) is True
+        assert parsed2.entries[1].is_used(history2) is True
+        assert parsed2.metadata['history'] == [0, 1]
 
     finally:
         Path(temp_path).unlink()
@@ -206,9 +220,9 @@ history: ["Second entry"]
 
 def test_parse_empty_metadata():
     """Test parsing a file with empty QUIVER_METADATA."""
-    content = """| Entry | Used |
-|-------|------|
-| Test | [ ] |
+    content = """| Entry | Category |
+|-------|----------|
+| Test | Personal |
 
 <!-- QUIVER_METADATA
 history: []
@@ -229,9 +243,9 @@ history: []
 
 def test_parse_no_metadata():
     """Test parsing a file without QUIVER_METADATA."""
-    content = """| Entry | Used |
-|-------|------|
-| Test | [ ] |
+    content = """| Entry | Category |
+|-------|----------|
+| Test | Personal |
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -257,8 +271,6 @@ def test_parse_file_not_found():
 
 def test_parse_real_examples():
     """Test parsing the actual example files."""
-    import os
-
     # Get the examples directory
     examples_dir = Path(__file__).parent.parent / 'examples'
 
@@ -269,7 +281,8 @@ def test_parse_real_examples():
             parsed = parse_file(str(prompts_file))
             assert len(parsed.entries) > 0
             assert 'Category' in parsed.headers
-            assert all(not entry.used for entry in parsed.entries)
+            history = parsed.metadata.get('history', [])
+            assert all(not entry.is_used(history) for entry in parsed.entries)
 
         # Test restaurants.md
         restaurants_file = examples_dir / 'restaurants.md'
@@ -288,13 +301,17 @@ def test_parse_real_examples():
             assert 'Duration' in parsed.headers
 
 
-def test_case_insensitive_used_status():
-    """Test that [X] and [x] are both recognized as used."""
-    content = """| Entry | Used |
-|-------|------|
-| First | [x] |
-| Second | [X] |
-| Third | [ ] |
+def test_backwards_compatibility_with_used_column():
+    """Test that files with the old 'Used' column are still parsed correctly."""
+    content = """| Entry | Category | Used |
+|-------|----------|------|
+| First | Personal | [ ] |
+| Second | Work | [x] |
+| Third | Personal | [ ] |
+
+<!-- QUIVER_METADATA
+history: []
+-->
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -304,9 +321,29 @@ def test_case_insensitive_used_status():
     try:
         parsed = parse_file(temp_path)
 
-        assert parsed.entries[0].used is True  # [x]
-        assert parsed.entries[1].used is True  # [X]
-        assert parsed.entries[2].used is False  # [ ]
+        # Should parse successfully
+        assert len(parsed.entries) == 3
+
+        # Headers should include Used (we keep it on parse)
+        assert 'Used' in parsed.headers
+
+        # Metadata should only include Category (not Used)
+        assert parsed.entries[0].metadata == {'Category': 'Personal'}
+        assert parsed.entries[1].metadata == {'Category': 'Work'}
+
+        # All entries should be unused since history is empty
+        # (the old Used column is ignored)
+        history = parsed.metadata.get('history', [])
+        assert all(not entry.is_used(history) for entry in parsed.entries)
+
+        # When we serialize, Used column should be removed
+        serialized = MarkdownTableParser.serialize_file(parsed)
+        # Count occurrences of "Used" - should only appear once in old content
+        # but not in the headers or data rows we generate
+        lines = serialized.split('\n')
+        header_line = [l for l in lines if l.startswith('| Entry')]
+        assert len(header_line) == 1
+        assert 'Used' not in header_line[0]
 
     finally:
         Path(temp_path).unlink()
@@ -323,6 +360,6 @@ if __name__ == '__main__':
     test_parse_no_metadata()
     test_parse_file_not_found()
     test_parse_real_examples()
-    test_case_insensitive_used_status()
+    test_backwards_compatibility_with_used_column()
 
-    print("All tests passed!")
+    print("All parser tests passed!")

@@ -32,18 +32,17 @@ Create a file called `prompts.md`:
 ```markdown
 # Daily Journaling Prompts
 
-| Entry | Category | Used |
-|-------|----------|------|
-| Write about a childhood memory | Personal | [ ] |
-| Describe your ideal day | Future | [ ] |
-| What are you grateful for today? | Gratitude | [ ] |
-| Reflect on a recent challenge | Growth | [ ] |
+| Entry | Category |
+|-------|----------|
+| Write about a childhood memory | Personal |
+| Describe your ideal day | Future |
+| What are you grateful for today? | Gratitude |
+| Reflect on a recent challenge | Growth |
 ```
 
 **Format Rules:**
 - First column: Entry content (required)
-- Last column: `Used` status with `[ ]` or `[x]` (required)
-- Middle columns: Any metadata you want (optional)
+- Additional columns: Any metadata you want (optional)
 
 ### 2. Pick a random entry
 
@@ -81,11 +80,11 @@ $ quiver reset prompts.md
 ### Restaurant Picker
 
 ```markdown
-| Restaurant | Cuisine | Price | Used |
-|------------|---------|-------|------|
-| Mario's Pizza | Italian | $$ | [ ] |
-| Sushi House | Japanese | $$$ | [ ] |
-| Taco Loco | Mexican | $ | [ ] |
+| Restaurant | Cuisine | Price |
+|------------|---------|-------|
+| Mario's Pizza | Italian | $$ |
+| Sushi House | Japanese | $$$ |
+| Taco Loco | Mexican | $ |
 ```
 
 ```bash
@@ -98,11 +97,11 @@ $ quiver pick restaurants.md
 ### Exercise Routines
 
 ```markdown
-| Exercise | Body Area | Duration | Used |
-|----------|-----------|----------|------|
-| Push-ups | Upper | 10 min | [ ] |
-| Squats | Lower | 15 min | [ ] |
-| Planks | Core | 5 min | [ ] |
+| Exercise | Body Area | Duration |
+|----------|-----------|----------|
+| Push-ups | Upper | 10 min |
+| Squats | Lower | 15 min |
+| Planks | Core | 5 min |
 ```
 
 ```bash
@@ -115,11 +114,11 @@ $ quiver pick exercises.md
 ### Reading List
 
 ```markdown
-| Article | Topic | Author | Used |
-|---------|-------|--------|------|
-| Clean Code Principles | Programming | Robert Martin | [ ] |
-| The Art of Debugging | Programming | Norman Matloff | [ ] |
-| Atomic Habits | Self-Help | James Clear | [ ] |
+| Article | Topic | Author |
+|---------|-------|--------|
+| Clean Code Principles | Programming | Robert Martin |
+| The Art of Debugging | Programming | Norman Matloff |
+| Atomic Habits | Self-Help | James Clear |
 ```
 
 ## Commands
@@ -237,29 +236,53 @@ quiver 0.1.0
 ### Basic Structure
 
 ```markdown
-| Entry | [Metadata Columns...] | Used |
-|-------|----------------------|------|
-| ...   | ...                  | [ ] |
+| Entry | [Metadata Columns...] |
+|-------|----------------------|
+| ...   | ...                  |
 ```
 
 ### State Tracking
 
-Quiver automatically adds a metadata comment at the end of the file to track selection history:
+Quiver automatically adds a metadata comment at the end of the file to track selection history using row indices:
 
 ```markdown
 <!-- QUIVER_METADATA
-history: ["Entry 1", "Entry 2"]
+history: [0, 3, 1]
 -->
 ```
 
-This enables LIFO rollback functionality. You can safely edit the table manually - Quiver will preserve the file structure.
+This tracks which entries have been selected by their row position (0-indexed). This enables LIFO rollback functionality.
+
+**How it works:**
+- When you pick an entry, its row index is added to the history
+- Used entries are those whose indices appear in the history
+- Rollback removes the last index from history (LIFO order)
+
+### Important Limitations
+
+⚠️ **Manual Editing Warnings:**
+
+1. **Adding entries**: Safe to add new entries at the end of the table
+2. **Editing content**: Safe to edit entry text or metadata in existing rows
+3. **Removing entries**: If you delete rows, run `quiver reset` to clear the history, as indices will become invalid
+4. **Reordering rows**: DO NOT reorder rows if there's existing history - this will corrupt the tracking. If you need to reorder, run `quiver reset` first
+
+**What happens if you violate these rules:**
+- If the table becomes smaller and history contains out-of-bounds indices, you'll get an error message: "History contains invalid index X. Run 'quiver reset' to clear history."
+- If you reorder rows with existing history, previously-used entries may appear as unused and vice versa
+
+**Safe workflow for major edits:**
+1. Run `quiver reset <file>` to clear history
+2. Make your edits (reorder, delete, add rows)
+3. Start using `quiver pick` again
 
 ### Tips
 
-1. **Any number of metadata columns**: Add as many columns as you need between the first (Entry) and last (Used) columns
-2. **Edit freely**: You can manually edit the file, add/remove entries, or change metadata
+1. **Any number of metadata columns**: Add as many metadata columns as you need
+2. **Edit content safely**: You can modify entry text and metadata values without issues
 3. **Multiple tables**: Create different files for different purposes (prompts, restaurants, exercises, etc.)
 4. **Version control friendly**: The format is plain text, perfect for git
+5. **Backwards compatible**: Old files with a "Used" column will still work (the column is ignored)
 
 ## Development
 

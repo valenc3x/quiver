@@ -11,8 +11,11 @@ class Entry:
     """Represents a single entry from the markdown table."""
     content: str
     metadata: dict[str, str]
-    used: bool
     row_index: int
+
+    def is_used(self, history: List[int]) -> bool:
+        """Check if this entry is marked as used in history."""
+        return self.row_index in history
 
 
 @dataclass
@@ -137,8 +140,11 @@ class MarkdownTableParser:
         Returns:
             List of Entry objects
         """
-        if not headers or len(headers) < 2:
+        if not headers or len(headers) < 1:
             return []
+
+        # Check if last column is "Used" (for backwards compatibility, we'll ignore it)
+        has_used_column = headers[-1].lower() == 'used'
 
         entries = []
 
@@ -147,19 +153,19 @@ class MarkdownTableParser:
             row_index = row_data['row_index']
 
             # Skip rows that don't have enough cells
-            if len(cells) < 2:
+            if len(cells) < 1:
                 continue
 
             # First column is the entry content
             content = cells[0]
 
-            # Last column is the used status
-            used_str = cells[-1].strip()
-            used = used_str == '[x]' or used_str == '[X]'
+            # Determine metadata column range
+            # If there's a "Used" column, skip it; otherwise use all remaining columns
+            metadata_end = len(cells) - 1 if has_used_column else len(cells)
 
             # Middle columns are metadata
             metadata = {}
-            for i in range(1, len(cells) - 1):
+            for i in range(1, metadata_end):
                 if i < len(headers):
                     header = headers[i]
                     value = cells[i]
@@ -168,7 +174,6 @@ class MarkdownTableParser:
             entries.append(Entry(
                 content=content,
                 metadata=metadata,
-                used=used,
                 row_index=row_index
             ))
 
@@ -183,7 +188,7 @@ class MarkdownTableParser:
             content: Raw markdown content
 
         Returns:
-            Dictionary with metadata (history, etc.)
+            Dictionary with metadata (history as list of indices, etc.)
         """
         match = MarkdownTableParser.METADATA_PATTERN.search(content)
         if not match:
@@ -201,17 +206,23 @@ class MarkdownTableParser:
                 key = key.strip()
                 value = value.strip()
 
-                # Parse history as a list
+                # Parse history as a list of integers
                 if key == 'history':
-                    # Remove brackets and quotes, split by comma
+                    # Remove brackets, split by comma
                     value = value.strip('[]')
                     if value:
-                        # Split by comma and clean up quotes
-                        items = [
-                            item.strip().strip('"').strip("'")
-                            for item in value.split(',')
-                        ]
-                        metadata['history'] = [item for item in items if item]
+                        # Split by comma and convert to integers
+                        try:
+                            items = [
+                                int(item.strip().strip('"').strip("'"))
+                                for item in value.split(',')
+                                if item.strip()
+                            ]
+                            metadata['history'] = items
+                        except ValueError:
+                            # If parsing fails (e.g., old string format), reset to empty
+                            # This provides backwards compatibility
+                            metadata['history'] = []
                     else:
                         metadata['history'] = []
                 else:
@@ -252,25 +263,24 @@ class MarkdownTableParser:
             else:
                 lines.append('')
 
+        # Filter out "Used" column from headers if present
+        headers = [h for h in parsed_file.headers if h.lower() != 'used']
+
         # Build table header
-        header_row = '| ' + ' | '.join(parsed_file.headers) + ' |'
+        header_row = '| ' + ' | '.join(headers) + ' |'
         lines.append(header_row)
 
         # Build separator row
-        separator = '|' + '|'.join(['---' for _ in parsed_file.headers]) + '|'
+        separator = '|' + '|'.join(['---' for _ in headers]) + '|'
         lines.append(separator)
 
         # Build data rows
         for entry in parsed_file.entries:
             cells = [entry.content]
 
-            # Add metadata columns in header order
-            for header in parsed_file.headers[1:-1]:  # Skip first and last
+            # Add metadata columns in header order (excluding "Used")
+            for header in headers[1:]:  # Skip first (Entry)
                 cells.append(entry.metadata.get(header, ''))
-
-            # Add used status
-            used_str = '[x]' if entry.used else '[ ]'
-            cells.append(used_str)
 
             row = '| ' + ' | '.join(cells) + ' |'
             lines.append(row)
@@ -280,11 +290,11 @@ class MarkdownTableParser:
             lines.append('')
             lines.append('<!-- QUIVER_METADATA')
 
-            # Serialize history
+            # Serialize history as integers
             if 'history' in parsed_file.metadata:
                 history = parsed_file.metadata['history']
                 if history:
-                    history_str = ', '.join([f'"{item}"' for item in history])
+                    history_str = ', '.join([str(idx) for idx in history])
                     lines.append(f'history: [{history_str}]')
                 else:
                     lines.append('history: []')

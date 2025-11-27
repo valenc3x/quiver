@@ -5,28 +5,6 @@ from typing import Optional
 from .parser import Entry, ParsedFile, save_file
 
 
-def mark_entry_used(parsed_file: ParsedFile, entry: Entry) -> None:
-    """
-    Mark an entry as used.
-
-    Args:
-        parsed_file: ParsedFile containing the entry
-        entry: Entry to mark as used
-    """
-    entry.used = True
-
-
-def mark_entry_unused(parsed_file: ParsedFile, entry: Entry) -> None:
-    """
-    Mark an entry as unused.
-
-    Args:
-        parsed_file: ParsedFile containing the entry
-        entry: Entry to mark as unused
-    """
-    entry.used = False
-
-
 def add_to_history(parsed_file: ParsedFile, entry: Entry) -> None:
     """
     Add an entry to the selection history.
@@ -39,10 +17,10 @@ def add_to_history(parsed_file: ParsedFile, entry: Entry) -> None:
         parsed_file.metadata['history'] = []
 
     # Add to the end of history (most recent)
-    parsed_file.metadata['history'].append(entry.content)
+    parsed_file.metadata['history'].append(entry.row_index)
 
 
-def remove_from_history(parsed_file: ParsedFile) -> Optional[str]:
+def remove_from_history(parsed_file: ParsedFile) -> Optional[int]:
     """
     Remove the most recent entry from history (LIFO).
 
@@ -50,7 +28,7 @@ def remove_from_history(parsed_file: ParsedFile) -> Optional[str]:
         parsed_file: ParsedFile to update
 
     Returns:
-        The content of the entry that was removed, or None if history is empty
+        The index of the entry that was removed, or None if history is empty
     """
     if 'history' not in parsed_file.metadata or not parsed_file.metadata['history']:
         return None
@@ -59,32 +37,31 @@ def remove_from_history(parsed_file: ParsedFile) -> Optional[str]:
     return parsed_file.metadata['history'].pop()
 
 
-def find_entry_by_content(parsed_file: ParsedFile, content: str) -> Optional[Entry]:
+def find_entry_by_index(parsed_file: ParsedFile, index: int) -> Optional[Entry]:
     """
-    Find an entry by its content string.
+    Find an entry by its row index.
 
     Args:
         parsed_file: ParsedFile to search
-        content: Content string to search for
+        index: Row index to search for
 
     Returns:
-        Entry with matching content, or None if not found
+        Entry with matching index, or None if not found
     """
     for entry in parsed_file.entries:
-        if entry.content == content:
+        if entry.row_index == index:
             return entry
     return None
 
 
 def pick_and_mark(parsed_file: ParsedFile, entry: Entry) -> None:
     """
-    Mark an entry as used and add it to history.
+    Mark an entry as used by adding it to history.
 
     Args:
         parsed_file: ParsedFile to update
         entry: Entry that was selected
     """
-    mark_entry_used(parsed_file, entry)
     add_to_history(parsed_file, entry)
 
 
@@ -96,3 +73,27 @@ def save_state(parsed_file: ParsedFile) -> None:
         parsed_file: ParsedFile to save
     """
     save_file(parsed_file)
+
+
+def validate_history(parsed_file: ParsedFile) -> None:
+    """
+    Validate that all indices in history are within bounds.
+
+    Args:
+        parsed_file: ParsedFile to validate
+
+    Raises:
+        ValueError: If any index in history is out of bounds
+    """
+    if 'history' not in parsed_file.metadata:
+        return
+
+    history = parsed_file.metadata['history']
+    num_entries = len(parsed_file.entries)
+
+    for idx in history:
+        if idx >= num_entries:
+            raise ValueError(
+                f"History contains invalid index {idx} (table has {num_entries} entries). "
+                f"The table may have been modified. Run 'quiver reset' to clear history."
+            )
