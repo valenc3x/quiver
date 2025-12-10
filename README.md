@@ -43,6 +43,7 @@ Create a file called `prompts.md`:
 **Format Rules:**
 - First column: Entry content (required)
 - Additional columns: Any metadata you want (optional)
+- State tracking is automatically added when you first use the file
 
 ### 2. Pick a random entry
 
@@ -235,11 +236,15 @@ quiver 0.1.0
 
 ### Basic Structure
 
+Simply create a markdown table with your entries:
+
 ```markdown
 | Entry | [Metadata Columns...] |
 |-------|----------------------|
 | ...   | ...                  |
 ```
+
+**That's it!** Quiver automatically adds state tracking on first use.
 
 ### State Tracking
 
@@ -254,35 +259,31 @@ history: [0, 3, 1]
 This tracks which entries have been selected by their row position (0-indexed). This enables LIFO rollback functionality.
 
 **How it works:**
-- When you pick an entry, its row index is added to the history
+- When you first run `quiver pick`, the metadata comment is automatically added
+- Each time you pick an entry, its row index is added to the history
 - Used entries are those whose indices appear in the history
 - Rollback removes the last index from history (LIFO order)
 
-### Important Limitations
+### Manual Editing Guidelines
 
-⚠️ **Manual Editing Warnings:**
+✅ **Safe operations:**
+1. **Adding entries**: Add new entries anywhere in the table - completely safe!
+2. **Editing content**: Edit entry text or metadata values - no problem!
+3. **Deleting entries**: Delete rows freely - invalid history entries are automatically cleaned up
 
-1. **Adding entries**: Safe to add new entries at the end of the table
-2. **Editing content**: Safe to edit entry text or metadata in existing rows
-3. **Removing entries**: If you delete rows, run `quiver reset` to clear the history, as indices will become invalid
-4. **Reordering rows**: DO NOT reorder rows if there's existing history - this will corrupt the tracking. If you need to reorder, run `quiver reset` first
+⚠️ **Operations that affect tracking:**
+1. **Reordering rows**: If you reorder rows with existing history, previously-used entries may appear as unused and vice versa. If you need to reorder, run `quiver reset` first to clear history.
 
-**What happens if you violate these rules:**
-- If the table becomes smaller and history contains out-of-bounds indices, you'll get an error message: "History contains invalid index X. Run 'quiver reset' to clear history."
-- If you reorder rows with existing history, previously-used entries may appear as unused and vice versa
-
-**Safe workflow for major edits:**
-1. Run `quiver reset <file>` to clear history
-2. Make your edits (reorder, delete, add rows)
-3. Start using `quiver pick` again
+**Note:** Quiver gracefully handles most table modifications by automatically cleaning up invalid history entries. The system won't crash if entries are deleted - it simply skips those history items.
 
 ### Tips
 
-1. **Any number of metadata columns**: Add as many metadata columns as you need
-2. **Edit content safely**: You can modify entry text and metadata values without issues
-3. **Multiple tables**: Create different files for different purposes (prompts, restaurants, exercises, etc.)
-4. **Version control friendly**: The format is plain text, perfect for git
-5. **Backwards compatible**: Old files with a "Used" column will still work (the column is ignored)
+1. **No manual setup needed**: Just create a markdown table and run `quiver pick` - metadata is added automatically
+2. **Any number of metadata columns**: Add as many metadata columns as you need
+3. **Flexible editing**: You can add and delete entries without worrying about breaking the system
+4. **Multiple tables**: Create different files for different purposes (prompts, restaurants, exercises, etc.)
+5. **Version control friendly**: The format is plain text, perfect for git
+6. **Backwards compatible**: Old files with a "Used" column will still work (the column is ignored)
 
 ## Development
 
