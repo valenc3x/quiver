@@ -144,7 +144,7 @@ history: []
 
 
 def test_rollback_last_invalid_index():
-    """Test rollback when history contains invalid index."""
+    """Test rollback when history contains invalid index - gracefully cleans up."""
     content = """| Entry |
 |-------|
 | First |
@@ -159,12 +159,13 @@ history: [5]
         temp_path = f.name
 
     try:
-        # This should raise ValueError due to validation
-        try:
-            rollback_last(temp_path)
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert 'invalid index' in str(e)
+        # Invalid index is cleaned up, so rollback returns None (no history)
+        result = rollback_last(temp_path)
+        assert result is None, "Should return None when history is empty after cleanup"
+
+        # Verify the file was updated with clean history
+        parsed = parse_file(temp_path)
+        assert parsed.metadata['history'] == []
 
     finally:
         Path(temp_path).unlink()

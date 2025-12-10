@@ -77,13 +77,14 @@ def save_state(parsed_file: ParsedFile) -> None:
 
 def validate_history(parsed_file: ParsedFile) -> None:
     """
-    Validate that all indices in history are within bounds.
+    Validate and clean history by removing any invalid indices.
+
+    This function gracefully handles table modifications by filtering out
+    indices that are no longer valid (e.g., when rows are deleted or the
+    table is reordered). Invalid indices are silently removed from history.
 
     Args:
-        parsed_file: ParsedFile to validate
-
-    Raises:
-        ValueError: If any index in history is out of bounds
+        parsed_file: ParsedFile to validate and clean
     """
     if 'history' not in parsed_file.metadata:
         return
@@ -91,9 +92,8 @@ def validate_history(parsed_file: ParsedFile) -> None:
     history = parsed_file.metadata['history']
     num_entries = len(parsed_file.entries)
 
-    for idx in history:
-        if idx >= num_entries:
-            raise ValueError(
-                f"History contains invalid index {idx} (table has {num_entries} entries). "
-                f"The table may have been modified. Run 'quiver reset' to clear history."
-            )
+    # Filter out invalid indices (those that are out of bounds or negative)
+    valid_history = [idx for idx in history if 0 <= idx < num_entries]
+
+    # Update history with cleaned version
+    parsed_file.metadata['history'] = valid_history

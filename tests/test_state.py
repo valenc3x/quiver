@@ -174,7 +174,7 @@ def test_validate_history_valid():
 
 
 def test_validate_history_out_of_bounds():
-    """Test validation fails with out-of-bounds indices."""
+    """Test validation gracefully cleans up out-of-bounds indices."""
     entries = [
         Entry(content='First', metadata={}, row_index=0),
         Entry(content='Second', metadata={}, row_index=1),
@@ -182,15 +182,14 @@ def test_validate_history_out_of_bounds():
     parsed_file = ParsedFile(
         entries=entries,
         headers=[],
-        metadata={'history': [0, 1, 5]}  # 5 is out of bounds
+        metadata={'history': [0, 1, 5, 10]}  # 5 and 10 are out of bounds
     )
 
-    try:
-        validate_history(parsed_file)
-        assert False, "Should have raised ValueError"
-    except ValueError as e:
-        assert 'invalid index' in str(e)
-        assert 'quiver reset' in str(e).lower()
+    # Should not raise - instead cleans up invalid indices
+    validate_history(parsed_file)
+
+    # History should only contain valid indices
+    assert parsed_file.metadata['history'] == [0, 1]
 
 
 def test_full_workflow():

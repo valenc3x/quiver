@@ -44,7 +44,8 @@ def test_cli_pick():
         # Verify one entry is now used
         from quiver.parser import parse_file
         parsed = parse_file(temp_path)
-        used_count = sum(1 for e in parsed.entries if e.used)
+        history = parsed.metadata.get('history', [])
+        used_count = sum(1 for e in parsed.entries if e.is_used(history))
         assert used_count == 1
 
     finally:
@@ -53,10 +54,14 @@ def test_cli_pick():
 
 def test_cli_pick_all_used():
     """Test pick when all entries are used."""
-    content = """| Entry | Used |
-|-------|------|
-| First | [x] |
-| Second | [x] |
+    content = """| Entry |
+|-------|
+| First |
+| Second |
+
+<!-- QUIVER_METADATA
+history: [0, 1]
+-->
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -93,7 +98,8 @@ def test_cli_pick_dry_run():
         # Verify no changes were made
         from quiver.parser import parse_file
         parsed = parse_file(temp_path)
-        assert all(not e.used for e in parsed.entries)
+        history = parsed.metadata.get('history', [])
+        assert all(not e.is_used(history) for e in parsed.entries)
 
     finally:
         Path(temp_path).unlink()
@@ -101,12 +107,12 @@ def test_cli_pick_dry_run():
 
 def test_cli_rollback():
     """Test the rollback command."""
-    content = """| Entry | Used |
-|-------|------|
-| First | [x] |
+    content = """| Entry |
+|-------|
+| First |
 
 <!-- QUIVER_METADATA
-history: ["First"]
+history: [0]
 -->
 """
 
@@ -124,7 +130,8 @@ history: ["First"]
         # Verify entry is now unused
         from quiver.parser import parse_file
         parsed = parse_file(temp_path)
-        assert all(not e.used for e in parsed.entries)
+        history = parsed.metadata.get('history', [])
+        assert all(not e.is_used(history) for e in parsed.entries)
         assert parsed.metadata['history'] == []
 
     finally:
@@ -154,11 +161,15 @@ def test_cli_rollback_empty():
 
 def test_cli_reset():
     """Test the reset command."""
-    content = """| Entry | Used |
-|-------|------|
-| First | [x] |
-| Second | [x] |
-| Third | [ ] |
+    content = """| Entry |
+|-------|
+| First |
+| Second |
+| Third |
+
+<!-- QUIVER_METADATA
+history: [0, 1]
+-->
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -175,7 +186,8 @@ def test_cli_reset():
         # Verify all entries are now unused
         from quiver.parser import parse_file
         parsed = parse_file(temp_path)
-        assert all(not e.used for e in parsed.entries)
+        history = parsed.metadata.get('history', [])
+        assert all(not e.is_used(history) for e in parsed.entries)
 
     finally:
         Path(temp_path).unlink()
@@ -204,11 +216,15 @@ def test_cli_reset_already_unused():
 
 def test_cli_status():
     """Test the status command."""
-    content = """| Entry | Category | Used |
-|-------|----------|------|
-| First | Personal | [x] |
-| Second | Work | [ ] |
-| Third | Personal | [ ] |
+    content = """| Entry | Category |
+|-------|----------|
+| First | Personal |
+| Second | Work |
+| Third | Personal |
+
+<!-- QUIVER_METADATA
+history: [0]
+-->
 """
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -229,13 +245,13 @@ def test_cli_status():
 
 def test_cli_status_verbose():
     """Test status with verbose flag."""
-    content = """| Entry | Category | Used |
-|-------|----------|------|
-| First | Personal | [x] |
-| Second | Work | [x] |
+    content = """| Entry | Category |
+|-------|----------|
+| First | Personal |
+| Second | Work |
 
 <!-- QUIVER_METADATA
-history: ["First", "Second"]
+history: [0, 1]
 -->
 """
 

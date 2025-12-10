@@ -31,13 +31,15 @@ def rollback_last(filepath: str) -> Optional[Entry]:
     # Parse the file
     parsed = parse_file(filepath)
 
-    # Validate history
+    # Validate history (may clean up invalid indices)
     validate_history(parsed)
 
     # Get the most recent entry index from history
     last_index = remove_from_history(parsed)
 
     if last_index is None:
+        # Save file in case validate_history cleaned up the history
+        save_file(parsed)
         return None
 
     # Find the entry
